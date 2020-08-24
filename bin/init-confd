@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+auth_db_name='wazo-confd'
+auth_db_username='wazo-confd'
+auth_db_password='Secr7t'
+superuser_db_uri='postgresql://postgres:Secr7t@postgres:5432/'
+auth_db_uri='postgresql://postgres:Secr7t@postgres:5432/wazo-confd'
+
+xivo-init-db --pg_db_uri "$superuser_db_uri" --auth_db_uri "$auth_db_uri" --db "$auth_db_name" --owner "$auth_db_username" --password "$auth_db_password" --init
+wazo-confd -d

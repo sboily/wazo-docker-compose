@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+auth_db_name='wazo-auth'
+auth_db_username='wazo-auth'
+auth_db_password='Secr7t'
+superuser_db_uri='postgresql://postgres:Secr7t@postgres:5432/'
+auth_db_uri='postgresql://postgres:Secr7t@postgres:5432/wazo-auth'
+
+function wait_for_wazo_auth() {
+    WAIT_TIMEOUT=30
+    WAIT_INTERVAL=1
+    while ! ss --listening --tcp '( sport = :9497 )' | grep -q LISTEN; do
+        sleep ${WAIT_INTERVAL}
+        WAIT_TIMEOUT=$((WAIT_TIMEOUT - WAIT_INTERVAL))
+        if [ "$WAIT_TIMEOUT" -eq 0 ]; then
+            echo "wazo-auth is not ready"
+            return 1
+        fi
+    done
+}
+
+function generate_certificates() {
+    # Generate certificate if they don't exist
+    if [ ! -f /etc/wazo-certs/public-certificate.pem ]; then
+        mkdir -p /etc/wazo-certs
+        cat << EOF > /tmp/openssl-x509.cfg
+[req]
+prompt = no
+distinguished_name = req_distinguished_name
+x509_extensions = v3_ca
+[req_distinguished_name]
+CN = *
+[v3_ca]
+subjectAltName = @alternate_names
+[alternate_names]
+DNS.1 = localhost
+DNS.2 = auth
+EOF
+        openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 -config /tmp/openssl-x509.cfg \
+            -keyout /etc/wazo-certs/private-key.pem -out /etc/wazo-certs/public-certificate.pem
+        groupadd wazo-auth
+        chgrp wazo-auth /etc/wazo-certs/*.pem
+        chmod g+r /etc/wazo-certs/*.pem
+    fi
+}
+
+# Generate certificates
+generate_certificates
+
+# Setup database
+wazo-auth-init-db --pg_db_uri "$superuser_db_uri" --auth_db_uri "$auth_db_uri" --db "$auth_db_name" --owner "$auth_db_username" --password "$auth_db_password"
+cd /usr/src/wazo-auth
+alembic -c alembic.ini upgrade head
+
+# Running wazo-auth for user & policy setup
+wazo-auth -d
+wait_for_wazo_auth
+
+# Bootstrap wazo-auth if not already done
+if [ ! -f $WAZO_AUTH_CLI_CONFIG/050-credentials.yml ]; then
+    # Bootstrap wazo-auth
+    wazo-auth-bootstrap setup
+    pkill wazo-auth # reboot service after bootstraping
+    wazo-auth -d
+    wait_for_wazo_auth
+    wazo-auth-bootstrap complete
+fi
+
+# Reboot wazo-auth in foreground
+pkill wazo-auth
+wazo-auth -df

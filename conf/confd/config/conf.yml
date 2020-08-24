@@ -1,0 +1,18 @@
+service_discovery:
+  enabled: false
+auth:
+  host: auth
+  verify_certificate: false
+  username: root
+  password: wazo
+bus:
+  host: rabbitmq
+db_uri: postgresql://wazo-confd:Secr7t@postgres/wazo-confd
+rest_api:
+  https:
+    certificate: /etc/wazo-certs/public-certificate.pem
+    private_key: /etc/wazo-certs/private-key.pem
+ari:
+  host: asterisk
+provd:
+    host: provd

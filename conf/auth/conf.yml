@@ -1,0 +1,17 @@
+service_discovery:
+  enabled: false
+smtp:
+  hostname: smtp
+amqp:
+  uri: amqp://guest:guest@rabbitmq:5672/
+confd:
+  host: confd
+  verify_certificate: false
+bus:
+  host: rabbitmq
+db_uri: postgresql://wazo-auth:Secr7t@postgres/wazo-auth
+#confd_db_uri: postgresql://wazo-confd:Secr7t@postgres/confd
+rest_api:
+  https:
+    certificate: /etc/wazo-certs/public-certificate.pem
+    private_key: /etc/wazo-certs/private-key.pem

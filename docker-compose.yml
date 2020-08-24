@@ -1,0 +1,103 @@
+version: '3'
+
+services:
+  sync:
+    image: wazopbx/wait
+    environment:
+      TIMEOUT: "${INTEGRATION_TEST_TIMEOUT}"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - smtp
+      - auth
+    environment:
+      TARGETS: "postgres:5432 rabbitmq:5672 smtp:25 auth:9497"
+
+  auth:
+    image: wazopbx/wazo-auth
+    ports: 
+      - "9497"
+    environment:
+      ALEMBIC_DB_URI: "postgresql://wazo-auth:Secr7t@postgres/wazo-auth"
+      TZ: UTC+1
+      XIVO_UUID: "e319e99a-9fd0-4a5b-86de-b818e5983b9a"
+    entrypoint:
+      - /bin/wazo-auth/init
+    volumes:
+      - ./conf/auth/conf.yml:/etc/wazo-auth/conf.d/conf.yml:ro
+      - ./bin/init-auth:/bin/wazo-auth/init
+      - certificates:/etc/wazo-certs/:rw
+      - wazo-auth-cli:/root/.config/wazo-auth-cli:rw
+    links:
+      - postgres
+      - rabbitmq
+
+  confd:
+    image: wazopbx/wazo-confd
+    ports: 
+      - "9486"
+    environment:
+      ALEMBIC_DB_URI: "postgresql://wazo-confd:Secr7t@postgres/wazo-confd"
+      TZ: UTC+1
+      XIVO_UUID: "e319e99a-9fd0-4a5b-86de-b818e5983b9a"
+    entrypoint:
+      - /bin/wazo-confd/init
+    volumes:
+      - ./conf/confd/config/conf.yml:/etc/wazo-confd/conf.d/conf.yml:ro
+      - ./conf/confd/key/wazo-confd-key.yml:/var/lib/wazo-auth-keys/wazo-confd-key.yml
+      - ./bin/init-confd:/bin/wazo-confd/init
+      - certificates:/etc/wazo-certs/:rw
+    links:
+      - postgres
+      - rabbitmq
+      - auth
+
+  auth-cli:
+    image: wazopbx/wazo-auth-cli
+    volumes:
+      - ./bin/init-auth-cli:/bin/wazo-auth-cli/init
+      - certificates:/etc/wazo-certs/:ro
+      - wazo-auth-cli:/root/.config/wazo-auth-cli:rw
+    environment:
+      WAZO_AUTH_CLI_CONFIG: /root/.config/wazo-auth-cli
+    entrypoint:
+      - /bin/wazo-auth-cli/init
+
+  postgres:
+    image: postgres
+    restart: always
+    ports:
+      - "5432"
+    environment:
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "Secr7t"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq
+    ports:
+      - "5672"
+
+  smtp:
+    image: munkyboy/fakesmtp
+    ports:
+      - "25"
+
+  nginx:
+    image: nginx
+    ports:
+      - "443:443"
+    volumes:
+      - ./conf/certs/:/etc/nginx/certs/
+      - ./conf/nginx/wazo.conf:/etc/nginx/conf.d/wazo.conf:ro
+      - ./conf/nginx/locations/:/etc/nginx/locations/:ro
+    links:
+      - auth
+      - confd
+
+volumes:
+  certificates:
+  wazo-auth-cli:
+  pgdata:

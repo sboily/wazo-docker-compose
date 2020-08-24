@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+wazo_root_username='root'
+wazo_root_password='wazo'
+
+function wait_for_wazo_auth() {
+    seconds=0
+    timeout=30
+    while [ "$seconds" -lt "$timeout" ] && ! wazo-auth-cli user list > /dev/null
+      do
+        echo -n .
+        seconds=$((seconds+1))
+        sleep 1
+      done
+}
+
+cat << EOF > $WAZO_AUTH_CLI_CONFIG/wazo-auth-cli.yml
+auth:
+    backend: wazo_user
+    host: auth
+    port: 9497
+    verify_certificate: /etc/wazo-certs/public-certificate.pem
+EOF
+
+wait_for_wazo_auth
+
+# Create your super user
+WAZO_USER=$(wazo-auth-cli user create --firstname Root --lastname SuperAdmin --password "$wazo_root_password" --email "$wazo_root_username@no-reply.no" "$wazo_root_username")
+if [ $WAZO_USER ]; then
+    wazo-auth-cli user add --policy wazo_default_master_user_policy $WAZO_USER
+fi
